@@ -1,3 +1,5 @@
+import copy
+
 from database.regione_DAO import RegioneDAO
 from database.tour_DAO import TourDAO
 from database.attrazione_DAO import AttrazioneDAO
@@ -69,7 +71,19 @@ class Model:
         self._max_giorni = max_giorni if max_giorni is not None else float('inf')
         self._max_budget = max_budget if max_budget is not None else float('inf')
 
-        self._ricorsione = ()
+        self._lista_tour = list(self.tour_map.values())
+
+        self._ricorsione(start_index=0 ,
+                         pacchetto_parziale=[],
+                         durata_corrente= 0,
+                         costo_corrente= 0,
+                         valore_corrente= 0,
+                         attrazioni_usate=set())
+
+        costo = 0
+        for tour in self._pacchetto_ottimo:
+            costo += tour.costo
+        self._costo = costo
         return self._pacchetto_ottimo, self._costo, self._valore_ottimo
 
     def _ricorsione(self, start_index: int, pacchetto_parziale: list, durata_corrente: int, costo_corrente: float, valore_corrente: int, attrazioni_usate: set):
@@ -77,10 +91,41 @@ class Model:
 
         # TODO: è possibile cambiare i parametri formali della funzione se ritenuto opportuno
 
-        if valore_corrente == -1 or valore_corrente > self._valore_ottimo:
-            pass
+        if valore_corrente > self._valore_ottimo:
+            self._valore_ottimo = valore_corrente
+            self._pacchetto_ottimo =  pacchetto_parziale.copy()
+
+        if start_index == len(self._lista_tour):
+            return
+
         else:
+            for i in range(start_index, len(self._lista_tour)):
+                tour_corrente = self._lista_tour[i]
+                if tour_corrente.id_regione == self._id_regione:
 
+                    nuove_attrazioni = tour_corrente.attrazioni.difference(attrazioni_usate)
 
+                    # vincoli
+                    if (durata_corrente + tour_corrente.durata_giorni <= self._max_giorni and
+                            costo_corrente + tour_corrente.costo <= self._max_budget):
 
+                        attrazioni_duplicate = tour_corrente.attrazioni.intersection(attrazioni_usate)
 
+                        if len(attrazioni_duplicate) == 0:
+                            pacchetto_parziale.append(tour_corrente)
+                            attrazioni_usate.update(tour_corrente.attrazioni)
+
+                            valore_aggiunto = 0
+                            for attrazione in tour_corrente.attrazioni:
+                                valore_aggiunto += attrazione.valore_culturale
+
+                            self._ricorsione(
+                                start_index=i + 1,
+                                pacchetto_parziale=pacchetto_parziale,
+                                durata_corrente=durata_corrente + tour_corrente.durata_giorni,
+                                costo_corrente=costo_corrente + tour_corrente.costo,
+                                valore_corrente=valore_corrente + valore_aggiunto,
+                                attrazioni_usate=attrazioni_usate)
+
+                            pacchetto_parziale.pop()
+                            attrazioni_usate.difference_update(tour_corrente.attrazioni)
